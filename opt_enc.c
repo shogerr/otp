@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
-#define BUFFER_SIZE 7000
+#define BUFFER_SIZE 70000
 #define CLIENT_TYPE 48
 struct Client
 {
@@ -51,6 +51,32 @@ int length_check(char* m, char* k)
     return 0;
 }
 
+int range_check(char* s)
+{
+    int i;
+    for (i = 0; i < strlen(s); i++)
+    {
+        if ((s[i] < 65 || s[i] > 90) && s[i] != 32)
+            return 1;
+    }
+    return 0;
+}
+
+void _send(struct Client* c, char* s)
+{
+    int m = 0;
+
+    memset(c->buf, 0, BUFFER_SIZE);
+    strcpy(c->buf, s);
+
+    for(;;)
+    {
+        m += send(c->fd, c->buf+m, BUFFER_SIZE-m-1, 0);
+        if (m == BUFFER_SIZE-1)
+            break;
+    }
+}
+
 int main (int argc, char** argv)
 {
     struct Client c;
@@ -75,6 +101,15 @@ int main (int argc, char** argv)
         free(key);
         key = 0;
         _perror("Key is shorter than message", 1);
+    }
+
+    if (range_check(msg))
+    {
+        free(msg);
+        msg = 0;
+        free(key);
+        key = 0;
+        _perror("Plaintext contains bad chars", 1);
     }
 
     //printf("%s", msg);
@@ -103,27 +138,44 @@ int main (int argc, char** argv)
 
     memset(c.buf, 0, BUFFER_SIZE);
     c.buf[0] = CLIENT_TYPE;
-    m = send(c.fd, c.buf, BUFFER_SIZE, 0);
+    m = send(c.fd, c.buf, BUFFER_SIZE-1, 0);
 
     memset(c.buf, 0, BUFFER_SIZE);
-    n = recv(c.fd, c.buf, BUFFER_SIZE, 0);
+    n = recv(c.fd, c.buf, BUFFER_SIZE-1, 0);
 
     if (c.buf[0] != 48)
         _perror("Incorrect server", 1);
 
+    /*
     memset(c.buf, 0, BUFFER_SIZE);
     strcpy(c.buf, msg);
 
     m = 0;
-
     for(;;)
     {
-        m = send(c.fd, c.buf+m*sizeof(char), BUFFER_SIZE-m, 0);
-        if (m == BUFFER_SIZE)
+        m += send(c.fd, c.buf+m, BUFFER_SIZE-m-1, 0);
+        if (m == BUFFER_SIZE-1)
             break;
     }
-    printf("%d\n", m);
+    */
+    _send(&c, msg);
 
+    memset(c.buf, 0, BUFFER_SIZE);
+    strcpy(c.buf, key);
+
+    m = 0;
+    for(;;)
+    {
+        m += send(c.fd, c.buf+m, BUFFER_SIZE-m-1, 0);
+        if (m == BUFFER_SIZE-1)
+            break;
+    }
+    //printf("%d\n", m);
+
+    memset(c.buf, 0, BUFFER_SIZE);
+    recv(c.fd, c.buf, BUFFER_SIZE - 1, 0);
+
+    printf("%s\n", c.buf);
     /*
     fgets(c.buf, BUFFER_SIZE - 1, stdin);
     c.buf[strcspn(c.buf, "\n")] = 0;

@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 // Size of buffer.
-#define BUFFER_SIZE 7000
+#define BUFFER_SIZE 70000
 
 // Encoder type server.
 #define SERVER_TYPE 48 
@@ -32,12 +32,24 @@ struct Net
     struct sockaddr_in addr_c;
 };
 
-/*
-char* encode(char* s, char *k)
+char* encode(char* s, char *t)
 {
+    const char* a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+    int i;
+    int j;
+    int k;
+
+    for (i = 0; i < strlen(s); i++)
+    {
+        if (s[i] == 32) j = 26;
+        else j = s[i] - 65;
+        if (t[i] == 32) k = 26;
+        else k = t[i] - 65;
+
+        s[i] = a[(j + k) % 27];
+    }
 
 }
-*/
 
 void _perror(char* s)
 {
@@ -64,6 +76,10 @@ int main(int argc, char** argv)
     net.optvalue = 1;
     net.max_conn = 5;
     pid_t pid;
+    char* m;
+    char* k;
+
+    char num[10];
 
     if (argc < 2)
     {
@@ -104,11 +120,7 @@ int main(int argc, char** argv)
         else if (!pid)
         {
             memset(net.buf, 0, BUFFER_SIZE);
-            //memset(net.buf_, 0, BUFFER_SIZE);
-            //bzero(net.buf, sizeof(net.buf));
-            //bzero(net.buf_, BUFFER_SIZE);
 
-            //net.buf_n = 0;
             net.buf_n = recv(net._fd, net.buf, BUFFER_SIZE-1, 0);
 
             if (net.buf_n < 0)
@@ -122,31 +134,53 @@ int main(int argc, char** argv)
             else
             {
                 send(net._fd, "1", 1, 0);
+                close(net._fd);
                 //continue;
             }
 
             memset(net.buf, 0, BUFFER_SIZE);
-            net.buf_m = BUFFER_SIZE - 1;
 
+            net.buf_m = BUFFER_SIZE - 1;
             for(;;)
             {
                 net.buf_n = recv(net._fd, net.buf, net.buf_m, 0);
-                _debug(net.buf);
                 if (net.buf_n == BUFFER_SIZE - 1)
                     break;
                 net.buf_m -= net.buf_n;
             }
 
-            _debug(net.buf);
+            m = calloc(strlen(net.buf), sizeof(char));
+            strcpy(m, net.buf); 
+
+            // Get key.
+            memset(net.buf, 0, BUFFER_SIZE);
+            net.buf_m = BUFFER_SIZE - 1;
+            for(;;)
+            {
+                net.buf_n = recv(net._fd, net.buf, net.buf_m, 0);
+                if (net.buf_n == BUFFER_SIZE - 1)
+                    break;
+                net.buf_m -= net.buf_n;
+            }
+
+            k = calloc(strlen(net.buf), sizeof(char));
+            strcpy(k, net.buf); 
+
+            encode(m, k);
+
+            _debug(m);
+
+            memset(net.buf, 0, BUFFER_SIZE);
+            strcpy(net.buf, m);
+            send(net._fd, net.buf, BUFFER_SIZE - 1, 0);
 
             close(net._fd);
+            free(m);
+            m = 0;
+            free(k);
+            k = 0;
             exit(EXIT_SUCCESS);
         }
-        else
-        {
-            write(STDOUT_FILENO, "wat\n", 4);
-        }
-
         close(net._fd);
     }
     close(net.fd);
