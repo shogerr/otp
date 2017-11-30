@@ -10,6 +10,6 @@ keygen: keygen.c
 	gcc -o $@ $^
 
 clean:
-	rm -f opt_enc_d opt_enc
+	rm -f opt_enc_d opt_enc keygen
 
 .PHONY: clean

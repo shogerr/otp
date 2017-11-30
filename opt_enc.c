@@ -14,9 +14,8 @@ struct Client
 {
     int fd;
     int port;
-    int r;
-    int w;
     char* buf;
+    char buf_[10];
     struct hostent* h;
     struct sockaddr_in addr_s;
 };
@@ -62,19 +61,40 @@ int range_check(char* s)
     return 0;
 }
 
+void _recv(struct Client* s)
+{
+    int n;
+
+    // Clear the holding buffer.
+    memset(s->buf, 0, BUFFER_SIZE);
+    while (strstr(s->buf, "@") == NULL)
+    {
+        // Clear reading buffer.
+        memset(s->buf_, 0, sizeof(s->buf_));
+        // Read some bytes.
+        n = recv(s->fd, s->buf_, sizeof(s->buf_) - 1, 0);
+        // Concat results.
+        strcat(s->buf, s->buf_);
+        // Break when done.
+        if (n == 0)
+            break;
+    }
+
+    s->buf[strcspn(s->buf, "@")] = '\0';
+}
+
 void _send(struct Client* c, char* s)
 {
-    int m = 0;
-
-    memset(c->buf, 0, BUFFER_SIZE);
-    strcpy(c->buf, s);
+    int n = 0;
 
     for(;;)
     {
-        m += send(c->fd, c->buf+m, BUFFER_SIZE-m-1, 0);
-        if (m == BUFFER_SIZE-1)
+        if ((n += send(c->fd, s + n, strlen(s) - n, 0)) < 0)
+            _perror("Socket trouble", 1);
+        if (n == strlen(s))
             break;
     }
+    send(c->fd, "@", 1, 0);
 }
 
 int main (int argc, char** argv)
@@ -146,44 +166,13 @@ int main (int argc, char** argv)
     if (c.buf[0] != 48)
         _perror("Incorrect server", 1);
 
-    /*
-    memset(c.buf, 0, BUFFER_SIZE);
-    strcpy(c.buf, msg);
-
-    m = 0;
-    for(;;)
-    {
-        m += send(c.fd, c.buf+m, BUFFER_SIZE-m-1, 0);
-        if (m == BUFFER_SIZE-1)
-            break;
-    }
-    */
     _send(&c, msg);
 
-    memset(c.buf, 0, BUFFER_SIZE);
-    strcpy(c.buf, key);
+    _send(&c, key);
 
-    m = 0;
-    for(;;)
-    {
-        m += send(c.fd, c.buf+m, BUFFER_SIZE-m-1, 0);
-        if (m == BUFFER_SIZE-1)
-            break;
-    }
-    //printf("%d\n", m);
-
-    memset(c.buf, 0, BUFFER_SIZE);
-    recv(c.fd, c.buf, BUFFER_SIZE - 1, 0);
+    _recv(&c);
 
     printf("%s\n", c.buf);
-    /*
-    fgets(c.buf, BUFFER_SIZE - 1, stdin);
-    c.buf[strcspn(c.buf, "\n")] = 0;
-    m = send(c.fd, c.buf, BUFFER_SIZE - 1, 0);
-    */
-
-    //printf("%s\n", c.buf);
-
     close(c.fd);
 
     free(msg);
