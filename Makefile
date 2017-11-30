@@ -17,6 +17,6 @@ keygen: keygen.c
 	gcc -o $@ $^
 
 clean:
-	rm -f opt_enc_d opt_enc opt_dec_d opt_dec keygen
+	rm -f otp_enc_d otp_enc otp_dec_d otp_dec keygen
 
 .PHONY: clean
