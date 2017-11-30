@@ -9,7 +9,12 @@
 #include <netdb.h>
 
 #define BUFFER_SIZE 70000
-#define CLIENT_TYPE 48
+#ifdef DECRYPT
+#   define CLIENT_TYPE 49
+#else
+#   define CLIENT_TYPE 48
+#endif
+
 struct Client
 {
     int fd;

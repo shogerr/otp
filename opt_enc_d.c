@@ -14,7 +14,11 @@
 #define BUFFER_SIZE 70000
 
 // Encoder type server.
-#define SERVER_TYPE 48 
+#ifdef DECRYPT
+#   define SERVER_TYPE 49
+#else
+#   define SERVER_TYPE 48 
+#endif
 
 struct Net
 {
@@ -32,25 +36,7 @@ struct Net
     struct sockaddr_in addr_c;
 };
 
-char* encode(char* s, char *t)
-{
-    const char* a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
-    int i;
-    int j;
-    int k;
-
-    for (i = 0; i < strlen(s); i++)
-    {
-        if (s[i] == 32) j = 26;
-        else j = s[i] - 65;
-        if (t[i] == 32) k = 26;
-        else k = t[i] - 65;
-
-        s[i] = a[(j + k) % 27];
-    }
-
-}
-
+// Custom print error. Sets errno if it has not been set.
 void _perror(char* s, int i)
 {
     if (!errno && i >= 0)
@@ -70,6 +56,33 @@ void _debug(char* s)
     fwrite(s, strlen(s), sizeof(char), f);
     fclose(f);
 }
+
+char* encode(char* s, char *t)
+{
+    const char* a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+    int i;
+    int j;
+    int k;
+
+    for (i = 0; i < strlen(s); i++)
+    {
+        if (s[i] == 32) j = 26;
+        else j = s[i] - 65;
+        if (t[i] == 32) k = 26;
+        else k = t[i] - 65;
+
+#ifdef DECRYPT
+        s[i] = (j - k) % 27;
+        if (s[i] < 0) s[i] += 27;
+        s[i] = a[s[i]];
+#else
+        s[i] = a[(j + k) % 27];
+#endif
+    }
+
+}
+
+
 
 void _recv(struct Net* s)
 {
@@ -116,20 +129,25 @@ int main(int argc, char** argv)
     char* m;
     char* k;
 
-    char num[10];
-
+    // Check arguments and throw an error if incorrect count.
     if (argc < 2)
     {
         errno = 1;
         _perror("Provide a port number", 1);
     }
 
+    // Allocate memory for our buffer, and clear.
     net.buf = malloc(BUFFER_SIZE * sizeof(char));
     memset(net.buf, 0, BUFFER_SIZE);
 
+    // Set up the listen socket.
+    // Parse port.
     net.port = atoi(argv[1]);
+    // AF_INET family.
     net.addr_s.sin_family = AF_INET;
+    // Set port.
     net.addr_s.sin_port = htons(net.port);
+    // Any address.
     net.addr_s.sin_addr.s_addr = INADDR_ANY;
 
     if ((net.fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -152,8 +170,10 @@ int main(int argc, char** argv)
 
         pid = fork();
 
+        // Fork failure check.
         if (pid < 0)
             _perror(NULL, -1);
+        // Handle child.
         else if (!pid)
         {
             memset(net.buf, 0, BUFFER_SIZE);
@@ -166,6 +186,8 @@ int main(int argc, char** argv)
                 _perror("Error reading from socket", 1);
             }
 
+            // Check the first character for an indications of the correct
+            // client.
             if (net.buf[0] == SERVER_TYPE)
                 send(net._fd, "0", 1, 0);
             else
@@ -185,12 +207,14 @@ int main(int argc, char** argv)
             k = calloc(strlen(net.buf), sizeof(char));
             strcpy(k, net.buf);
 
-            _debug(k);
+            //_debug(m);
             // Encrypt the message.
             encode(m, k);
 
+            // Send encoding..
             _send(&net, m);
 
+            // Cleanup heap.
             close(net._fd);
             free(m);
             m = 0;
@@ -198,7 +222,9 @@ int main(int argc, char** argv)
             k = 0;
             exit(EXIT_SUCCESS);
         }
+        // Close new socket file handle.
         close(net._fd);
     }
+    // Close listening socket handle.
     close(net.fd);
 }
