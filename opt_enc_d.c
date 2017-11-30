@@ -207,7 +207,6 @@ int main(int argc, char** argv)
             k = calloc(strlen(net.buf), sizeof(char));
             strcpy(k, net.buf);
 
-            //_debug(m);
             // Encrypt the message.
             encode(m, k);
 

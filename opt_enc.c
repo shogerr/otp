@@ -78,6 +78,7 @@ void _recv(struct Client* s)
         memset(s->buf_, 0, sizeof(s->buf_));
         // Read some bytes.
         n = recv(s->fd, s->buf_, sizeof(s->buf_) - 1, 0);
+        if (n < 0) _perror("Socket error", 1);
         // Concat results.
         strcat(s->buf, s->buf_);
         // Break when done.
