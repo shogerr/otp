@@ -1,15 +1,15 @@
-all: opt_enc_d opt_enc opt_dec_d opt_dec keygen
+all: otp_enc_d otp_enc otp_dec_d otp_dec keygen
 
-opt_enc_d: opt_enc_d.c
+otp_enc_d: otp_enc_d.c
 	gcc -o $@ $^
 
-opt_enc: opt_enc.c
+otp_enc: otp_enc.c
 	gcc -o $@ $^
 
-opt_dec_d: opt_enc_d.c
+otp_dec_d: otp_enc_d.c
 	gcc -o $@ $^ -D DECRYPT
 
-opt_dec: opt_enc.c
+otp_dec: otp_enc.c
 	gcc -o $@ $^ -D DECRYPT
 
 
