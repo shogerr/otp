@@ -22,17 +22,17 @@
 
 struct Net
 {
-    int port;
-    int fd;
-    int _fd;
-    int max_conn;
-    socklen_t c_n;
-    socklen_t optvalue;
-    char* buf;
-    char buf_[10];
-    int n;
-    int m;
-    struct sockaddr_in addr_s;
+    int port;                   // Port to use.
+    int fd;                     // Listening socket file descriptor.
+    int _fd;                    // Tx/Rx socket file descriptor.
+    int max_conn;               // Max number of connections.
+    socklen_t c_n;              // Size of sending socket.
+    socklen_t optvalue;         // Option value.
+    char* buf;                  // Main data bucket.
+    char buf_[10];              // Tiny read buffer.
+    int n;                      // Send counter.
+    int m;                      // Recieve counter.
+    struct sockaddr_in addr_s;  // Socket addresses.
     struct sockaddr_in addr_c;
 };
 
@@ -57,6 +57,7 @@ void _debug(char* s)
     fclose(f);
 }
 
+// Encode string s with key t.
 char* encode(char* s, char *t)
 {
     const char* a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ";
@@ -66,14 +67,20 @@ char* encode(char* s, char *t)
 
     for (i = 0; i < strlen(s); i++)
     {
+        // Adjust the values of each character to 0-27
+        // If its a space, catch the space.
+        // Then do every other character.
         if (s[i] == 32) j = 26;
         else j = s[i] - 65;
         if (t[i] == 32) k = 26;
         else k = t[i] - 65;
 
+        // Handles both the decryption, and encytion, depending on compiler
+        // set definitions.
 #ifdef DECRYPT
         s[i] = (j - k) % 27;
         if (s[i] < 0) s[i] += 27;
+        // Use character map to get the correct character.
         s[i] = a[s[i]];
 #else
         s[i] = a[(j + k) % 27];
@@ -82,8 +89,7 @@ char* encode(char* s, char *t)
 
 }
 
-
-
+// Handle reception of transmission.
 void _recv(struct Net* s)
 {
     int n;
@@ -103,13 +109,16 @@ void _recv(struct Net* s)
             break;
     }
 
+    // Remove terminating null character.
     s->buf[strcspn(s->buf, "@")] = '\0';
 }
 
+// Ensure data transmission.
 void _send(struct Net* c, char* s)
 {
     int n = 0;
 
+    // Contintue to try and send data until all data is sent: use string length.
     for(;;)
     {
         if ((n += send(c->_fd, s + n, strlen(s) - n, 0)) < 0)
@@ -117,24 +126,26 @@ void _send(struct Net* c, char* s)
         if (n == strlen(s))
             break;
     }
+    // Terminating byte.
     send(c->_fd, "@", 1, 0);
 }
 
 int main(int argc, char** argv)
 {
+    // Data structure for sockets.
     struct Net net;
+    // Set values for option and max connect.
     net.optvalue = 1;
     net.max_conn = 5;
+    // Place for pid during fork.
     pid_t pid;
+    // Message and key strings.
     char* m;
     char* k;
 
     // Check arguments and throw an error if incorrect count.
     if (argc < 2)
-    {
-        errno = 1;
         _perror("Provide a port number", 1);
-    }
 
     // Allocate memory for our buffer, and clear.
     net.buf = malloc(BUFFER_SIZE * sizeof(char));
@@ -150,14 +161,17 @@ int main(int argc, char** argv)
     // Any address.
     net.addr_s.sin_addr.s_addr = INADDR_ANY;
 
+    // Create the socket.
     if ((net.fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         _perror(NULL, -1);
 
     setsockopt(net.fd, SOL_SOCKET, SO_REUSEADDR, &net.optvalue, sizeof(socklen_t));
 
+    // Binde socket, throw error otherwise.
     if (bind(net.fd, (struct sockaddr *) &net.addr_s, sizeof(net.addr_s)))
         _perror(NULL, -1);
 
+    // Lisetn for connections.
     listen(net.fd, net.max_conn);
 
     for (;;)
@@ -178,18 +192,17 @@ int main(int argc, char** argv)
         {
             memset(net.buf, 0, BUFFER_SIZE);
 
+            // Recieve a client qualifier byte.
             net.n = recv(net._fd, net.buf, BUFFER_SIZE-1, 0);
 
             if (net.n < 0)
-            {
-                errno = 1;
                 _perror("Error reading from socket", 1);
-            }
 
             // Check the first character for an indications of the correct
             // client.
             if (net.buf[0] == SERVER_TYPE)
                 send(net._fd, "0", 1, 0);
+            // Reject and close otherwise.
             else
             {
                 send(net._fd, "1", 1, 0);
@@ -197,7 +210,7 @@ int main(int argc, char** argv)
                 exit(EXIT_FAILURE);
             }
 
-            // Recieve message.
+            // Recieve message. Create heap space, and store string.
             _recv(&net);
             m = calloc(strlen(net.buf), sizeof(char));
             strcpy(m, net.buf);

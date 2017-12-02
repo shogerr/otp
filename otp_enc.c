@@ -8,7 +8,10 @@
 #include <netinet/in.h>
 #include <netdb.h>
 
+// Buffer size.
 #define BUFFER_SIZE 70000
+
+// Set the client type depending on encryption or decryption.
 #ifdef DECRYPT
 #   define CLIENT_TYPE 49
 #else
@@ -17,14 +20,15 @@
 
 struct Client
 {
-    int fd;
-    int port;
-    char* buf;
-    char buf_[10];
-    struct hostent* h;
-    struct sockaddr_in addr_s;
+    int fd;                         // Socket file handle.
+    int port;                       // Port to use.
+    char* buf;                      // Buffer to hold concat of read buffer.
+    char buf_[10];                  // Read buffer.
+    struct hostent* h;              // Host information.
+    struct sockaddr_in addr_s;      // Server address data structure.
 };
 
+// perror wrapper that sets errno and passes paramater to perror.
 void _perror(char* s, int i)
 {
     if (!errno && i >= 0)
@@ -34,20 +38,25 @@ void _perror(char* s, int i)
     exit(errno);
 }
 
+// Parse a file out to a string.
 char* parse_file(char* fn, int n)
 {
     char* s;
     FILE* f;
+    // Open a file handle and throw an error if necessary.
     if (!(f = fopen(fn, "r")))
         _perror(NULL, -1);
+    // Allocate and clear memory for the return string.
     s = calloc(n, sizeof(char));
     fgets(s, n, f);
+    // Remove trailing newline.
     s[strcspn(s, "\n")] = 0;
 
     fclose(f);
     return s;
 }
 
+// Check length of key and message through length comparison.
 int length_check(char* m, char* k)
 {
     if (strlen(k) < strlen(m))
@@ -55,6 +64,8 @@ int length_check(char* m, char* k)
     return 0;
 }
 
+// Loop through each character of a strint, ensuring it is in the boundary
+// of expected by data.
 int range_check(char* s)
 {
     int i;
@@ -66,6 +77,7 @@ int range_check(char* s)
     return 0;
 }
 
+// Safe reception of transmission.
 void _recv(struct Client* s)
 {
     int n;
@@ -89,17 +101,21 @@ void _recv(struct Client* s)
     s->buf[strcspn(s->buf, "@")] = '\0';
 }
 
+// Send wraps send() and ensures full transmission of data.
 void _send(struct Client* c, char* s)
 {
     int n = 0;
 
+    // Loop until all data is sent.
     for(;;)
     {
         if ((n += send(c->fd, s + n, strlen(s) - n, 0)) < 0)
             _perror("Socket trouble", 1);
+        // Break if all data has been sent.
         if (n == strlen(s))
             break;
     }
+    // Send terminating signal.
     send(c->fd, "@", 1, 0);
 }
 
@@ -122,6 +138,7 @@ int main (int argc, char** argv)
     // Check length of key vs message.
     if (length_check(msg, key))
     {
+        // Cleanup and print error.
         free(msg);
         msg = 0;
         free(key);
@@ -131,6 +148,7 @@ int main (int argc, char** argv)
 
     if (range_check(msg))
     {
+        // Cleanup and print error.
         free(msg);
         msg = 0;
         free(key);
@@ -138,11 +156,10 @@ int main (int argc, char** argv)
         _perror("Plaintext contains bad chars", 1);
     }
 
-    //printf("%s", msg);
-
     bzero(&c.addr_s, sizeof(c.addr_s));
     c.port = atoi(argv[3]);
 
+    // Setup address space.
     c.addr_s.sin_family = AF_INET;
     c.addr_s.sin_port = htons(c.port);
     c.h = gethostbyname("localhost");
@@ -160,27 +177,38 @@ int main (int argc, char** argv)
     if (connect(c.fd, (struct sockaddr*)&c.addr_s, sizeof(c.addr_s)) < 0)
         _perror("Error connecting", 1);
 
+    // Alloc space on heap for buffer.
     c.buf = malloc(BUFFER_SIZE * sizeof(char));
 
+    // Clean and fill buffer to send client indicator.
     memset(c.buf, 0, BUFFER_SIZE);
     c.buf[0] = CLIENT_TYPE;
     m = send(c.fd, c.buf, BUFFER_SIZE-1, 0);
 
+    // Clear buffer, recieve server indicator.
     memset(c.buf, 0, BUFFER_SIZE);
     n = recv(c.fd, c.buf, BUFFER_SIZE-1, 0);
 
     if (c.buf[0] != 48)
         _perror("Incorrect server", 1);
 
+    // Send message data.
     _send(&c, msg);
 
+    // Send key data.
     _send(&c, key);
 
+    // Recieve encoding.
     _recv(&c);
 
+    // Print result string.
     printf("%s\n", c.buf);
+
+    // Cleanup
+    // Close socket file descriptor.
     close(c.fd);
 
+    // Free memory on heap.
     free(msg);
     msg = 0;
     free(key);
